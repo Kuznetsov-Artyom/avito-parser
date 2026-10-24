@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Avito Парсер — умный поиск объявлений</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <h1>🔍 Avito Парсер</h1>
+      <p class="subtitle">Поиск объявлений с сортировкой по надёжности продавца, цене и удалённости</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- ==== Форма поиска ==== -->
+    <section class="card form-card">
+      <form id="search-form">
+        <div class="form-grid">
+          <div class="field span-2 suggest-wrap">
+            <label for="query">Что ищем *</label>
+            <input type="text" id="query" name="query" required
+                   placeholder="Начните вводить: iphone, велосипед…" maxlength="200"
+                   autocomplete="off">
+            <div id="suggest-box" class="suggest-box hidden"></div>
+            <small class="hint">Подсказки подгружаются с Avito и из истории ваших поисков</small>
+          </div>
+
+          <div class="field">
+            <label for="city">Город</label>
+            <select id="city" name="city"></select>
+            <small class="hint">Подставляется автоматически по вашей геопозиции</small>
+          </div>
+
+          <div class="field">
+            <label for="max-items">Сколько объявлений парсить</label>
+            <input type="number" id="max-items" name="max_items" min="1" max="50" value="20">
+            <small class="hint">Больше 20 — дольше и выше риск блокировки</small>
+          </div>
+
+          <div class="field">
+            <label for="price-min">Цена от, ₽</label>
+            <input type="number" id="price-min" name="price_min" min="0" step="500" placeholder="0">
+          </div>
+
+          <div class="field">
+            <label for="price-max">Цена до, ₽</label>
+            <input type="number" id="price-max" name="price_max" min="0" step="500" placeholder="∞">
+          </div>
+
+          <div class="field span-2">
+            <label>Моя геопозиция <span class="hint-inline">(для сортировки по удалённости)</span></label>
+            <div class="geo-row">
+              <input type="text" id="user-location" placeholder="Город или адрес: Москва, Тверская 1"
+                     autocomplete="off">
+              <button type="button" id="geolocate-btn" class="btn-secondary"
+                      title="Определить автоматически через браузер">📍 Определить</button>
+            </div>
+            <small id="geo-status" class="hint"></small>
+          </div>
+        </div>
+
+        <!-- Веса критериев -->
+        <div class="weights">
+          <div class="weights-head">
+            <label class="weights-title">Важность критериев сортировки <span class="hint-inline">— проценты всегда в сумме дают 100</span></label>
+            <div class="presets">
+              <button type="button" class="preset-btn" data-preset="40,30,30">Сбалансировано</button>
+              <button type="button" class="preset-btn" data-preset="70,15,15">Надёжность</button>
+              <button type="button" class="preset-btn" data-preset="15,70,15">Дешевле</button>
+              <button type="button" class="preset-btn" data-preset="15,15,70">Ближе</button>
+            </div>
+          </div>
+          <div class="weight-row">
+            <span class="weight-name">🛡 Надёжность продавца</span>
+            <input type="range" id="w-rel" min="0" max="100" value="40" step="5">
+            <span class="weight-val" id="w-rel-val">40%</span>
+          </div>
+          <div class="weight-row">
+            <span class="weight-name">💰 Цена</span>
+            <input type="range" id="w-price" min="0" max="100" value="30" step="5">
+            <span class="weight-val" id="w-price-val">30%</span>
+          </div>
+          <div class="weight-row">
+            <span class="weight-name">📍 Близость ко мне</span>
+            <input type="range" id="w-dist" min="0" max="100" value="30" step="5">
+            <span class="weight-val" id="w-dist-val">30%</span>
+          </div>
+          <p class="weights-formula" id="weights-formula">Итоговый балл = 40% надёжность + 30% цена + 30% близость</p>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn-primary">Найти и отсортировать</button>
+      </form>
+    </section>
+
+    <!-- ==== Прогресс ==== -->
+    <section class="card progress-card hidden" id="progress-card">
+      <div class="progress-head">
+        <span id="progress-step">Запускаем поиск…</span>
+        <span id="progress-count"></span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <p class="hint">Парсим страницу поиска Avito и геокодируем районы. Обычно это 10–60 секунд.</p>
+    </section>
+
+    <!-- ==== Ошибка ==== -->
+    <section class="card error-card hidden" id="error-card">
+      <h3>⚠ Ошибка</h3>
+      <p id="error-text"></p>
+    </section>
+
+    <!-- ==== Результаты ==== -->
+    <section class="results hidden" id="results-section">
+      <div class="results-head">
+        <h2 id="results-title">Результаты</h2>
+        <select id="sort-select">
+          <option value="total">По итоговому баллу</option>
+          <option value="price">По цене ↑</option>
+          <option value="distance">По удалённости</option>
+          <option value="rating">По рейтингу продавца</option>
+        </select>
+      </div>
+      <div id="results-list"></div>
+    </section>
+  </main>
+
+  <footer class="container footer">
+    <small>Для личного использования. Автоматический доступ к Avito ограничен их правилами —
+    используйте разумные объёмы и паузы.</small>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
